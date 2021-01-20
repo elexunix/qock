@@ -38,40 +38,50 @@ using apply_mp = apply_modus_ponens<th_A_implies_B, th_A>;
 template<typename X, typename Y, typename Z>
 using ternary_implication = implication<X, implication<Y, Z>>;
 
-/*template<typename, typename, typename, typename>
-struct illformed_ternary_modus_ponens_application {};
-template<typename th_A_implies_B_implies_C, typename th_A, typename th_B, typename C>
-struct ternary_modus_ponens {
-    using result = illformed_ternary_modus_ponens_application<th_A_implies_B_implies_C, th_A, th_B, C>;
-};
-template<typename A, typename B, typename C>
-struct ternary_modus_ponens<theorem<ternary_implication<A, B, C>>, theorem<A>, theorem<B>, C> {
-    using result = theorem<C>;
-};*/
-
+template<typename>
+struct formulae::is_wff;
+template<typename...>
+struct formulae::are_wff;
 
 namespace propositional {
-    const bool allow_law_of_excluded_middle = true;
-    template<typename a, typename b>
-    using hypothesis_addition = theorem<ternary_implication<a, b, a>>;
+    struct illformed_propositional_axiom_application {};
+
     template<typename a, typename b, typename c>
-    using conditional_modus_ponens = theorem<ternary_implication<ternary_implication<a, b, c>, implication<a, b>, implication<a, c>>>;
+    using conditional_modus_ponens = typename std::conditional<are_wff<a, b, c>, theorem<
+        ternary_implication<ternary_implication<a, b, c>, implication<a, b>, implication<a, c>>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using conjunction_introduction = theorem<ternary_implication<a, b, conjunction<a, b>>>;
+    using conjunction_introduction = typename std::conditional<are_wff<a, b>, theorem<
+        ternary_implication<a, b, conjunction<a, b>>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using left_conjunction_elimination = theorem<implication<conjunction<a, b>, a>>;
+    using left_conjunction_elimination = typename std::conditional<are_wff<a, b>, theorem<
+        implication<conjunction<a, b>, a>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using right_conjunction_elimination = theorem<implication<conjunction<a, b>, b>>;
+    using right_conjucntion_elimination = typename std::conditiona<are_wff<a, b>, theorem<
+        implication<conjunction<a, b>, b>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using left_disjunction_introduction = theorem<implication<a, disjunction<a, b>>>;
+    using left_disjunction_introduction = typename std::conditional<are_wff<a, b>, theorem<
+        implication<a, disjunction<a, b>>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using right_disjunction_introduction = theorem<implication<b, disjunction<a, b>>>;
+    using right_disjunction_introductin = typename std::conditional<are_wff<a, b>, theorem<
+        implication<b, disjunction<a, b>>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b, typename c>
-    using disjunction_elimination = theorem<ternary_implication<implication<a, c>, implication<b, c>, implication<disjunction<a, b>, c>>>;
+    using disjunction_elimination = typename std::conditional<are_wff<a, b, c>, theorem<
+        ternary_implication<implication<a, c>, implication<b, c>, implication<disjunction<a, b>, c>>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a>
-    using false_implies_anything = theorem<implication<False, a>>;
+    using false_implies_anything = typename std::conditional<is_wff<a>::value, theorem<
+        implication<False, a>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a>
-    using law_of_excluded_middle = std::enable_if<allow_law_of_excluded_middle, theorem<disjunction<a, negation<a>>>>;
+    using law_of_excluded_middle = std::enable_if<allow_law_of_excluded_middle, std::conditional<is_wff<a>::value, theorem<
+        disjunction<a, negation<a>>
+    >, illformed_propositional_axiom_application>::type>::type;
 }
 
 
