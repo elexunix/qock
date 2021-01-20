@@ -38,50 +38,60 @@ using apply_mp = apply_modus_ponens<th_A_implies_B, th_A>;
 template<typename X, typename Y, typename Z>
 using ternary_implication = implication<X, implication<Y, Z>>;
 
-template<typename>
-struct formulae::is_wff;
-template<typename...>
-struct formulae::are_wff;
+namespace formulae {
+    template<typename>
+    struct is_wff;
+    template<typename...>
+    struct are_wff;
+}
 
 namespace propositional {
     struct illformed_propositional_axiom_application {};
 
+    const bool allow_law_of_excluded_middle = false;
+
+    template<typename a, typename b>
+    using hypothesis_addition = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
+        ternary_implication<a, b, a>
+    >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b, typename c>
-    using conditional_modus_ponens = typename std::conditional<are_wff<a, b, c>, theorem<
+    using conditional_modus_ponens = typename std::conditional<formulae::are_wff<a, b, c>::value, theorem<
         ternary_implication<ternary_implication<a, b, c>, implication<a, b>, implication<a, c>>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using conjunction_introduction = typename std::conditional<are_wff<a, b>, theorem<
+    using conjunction_introduction = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
         ternary_implication<a, b, conjunction<a, b>>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using left_conjunction_elimination = typename std::conditional<are_wff<a, b>, theorem<
+    using left_conjunction_elimination = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
         implication<conjunction<a, b>, a>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using right_conjucntion_elimination = typename std::conditiona<are_wff<a, b>, theorem<
+    using right_conjunction_elimination = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
         implication<conjunction<a, b>, b>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using left_disjunction_introduction = typename std::conditional<are_wff<a, b>, theorem<
+    using left_disjunction_introduction = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
         implication<a, disjunction<a, b>>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b>
-    using right_disjunction_introductin = typename std::conditional<are_wff<a, b>, theorem<
+    using right_disjunction_introductin = typename std::conditional<formulae::are_wff<a, b>::value, theorem<
         implication<b, disjunction<a, b>>
     >, illformed_propositional_axiom_application>::type;
     template<typename a, typename b, typename c>
-    using disjunction_elimination = typename std::conditional<are_wff<a, b, c>, theorem<
+    using disjunction_elimination = typename std::conditional<formulae::are_wff<a, b, c>::value, theorem<
         ternary_implication<implication<a, c>, implication<b, c>, implication<disjunction<a, b>, c>>
     >, illformed_propositional_axiom_application>::type;
     template<typename a>
-    using false_implies_anything = typename std::conditional<is_wff<a>::value, theorem<
+    using false_implies_anything = typename std::conditional<formulae::is_wff<a>::value, theorem<
         implication<False, a>
     >, illformed_propositional_axiom_application>::type;
     template<typename a>
-    using law_of_excluded_middle = std::enable_if<allow_law_of_excluded_middle, std::conditional<is_wff<a>::value, theorem<
-        disjunction<a, negation<a>>
-    >, illformed_propositional_axiom_application>::type>::type;
+    using law_of_excluded_middle = typename std::enable_if<allow_law_of_excluded_middle,
+        typename std::conditional<formulae::is_wff<a>::value, theorem<
+            disjunction<a, negation<a>>
+        >, illformed_propositional_axiom_application>::type
+    >::type;
 }
 
 
