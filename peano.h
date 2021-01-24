@@ -58,7 +58,7 @@ namespace terms {
     struct are_term_containers_composable<product, sum> : std::true_type {};
     template<>
     struct are_term_containers_composable<product, product> : std::true_type {};
-
+    
     template<typename a>
     struct variable_occurs_in_term<a, Zero> : std::false_type {};
     template<typename a, typename b>
@@ -226,7 +226,7 @@ namespace axioms {
     using induction = typename std::conditional<is_wff<forall<n, phi>>::value, theorem<
         ternary_implication<
             typename replace_free_variable_with_term<n, Zero, phi>::result,
-            implication<phi, replace_free_variable_with_term<n, S<n>, phi>>,
+            implication<phi, typename replace_free_variable_with_term<n, S<variable<n>>, phi>::result>,
             phi
         >
     >, illformed_axiom>::type;

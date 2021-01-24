@@ -1,7 +1,8 @@
-// assumes all included
+#include "propositional_lib.h"
+
 using namespace formulae;
 
-void test() {  // asserts are executed even without calling
+void test() {
     struct a {};
     struct b {};
     struct c {};
@@ -25,204 +26,186 @@ using is_even = exists<k, equal<n, sum<variable<k>, variable<k>>>>;
 template<typename n, typename k>
 using is_odd = exists<k, equal<n, S<sum<variable<k>, variable<k>>>>>;
 
-template<typename a>
-struct lemma_a_implies_a {
-    using b = implication<a, a>;
-    using a_implies_b_implies_a = propositional::hypothesis_addition<a, b>;
-    using a_implies_b = propositional::hypothesis_addition<a, a>;
-    using a_implies_a = apply_modus_ponens<
-        apply_modus_ponens<propositional::conditional_modus_ponens<a, b, a>, a_implies_b_implies_a>,  // ~ (a->b) -> (a->a)
-        a_implies_b
+template<typename x, typename phi, typename psi>
+struct conditionally_perform_implication_under_existential_quantifier_h {
+                // proves the following implication: (exists x phi) and (forall x (phi -> psi)) -> (exists x psi)
+    // that is, we are given:
+    // forall x not phi -> false
+    // forall x (phi -> psi)
+    // and we want to prove that:
+    // forall x not psi -> false
+    using premise = conjunction<conjunction<negation<forall<x, negation<phi>>>, forall<x, implication<phi, psi>>>, forall<x, negation<psi>>>;
+    // we are about to derive False from it!
+    using prop_premise_implies_not_psi = apply_conditional_modus_ponens<
+        add_hypothesis<premise, firstorder::apply_universal_instantiation<x, variable<x>, forall<x, negation<psi>>, negation<psi>>>,
+        use_library_lemma<implication<premise, forall<x, negation<psi>>>>
     >;
-    using result = a_implies_a;
-    static_assert(std::is_same<result, theorem<implication<a, a>>>::value);
+    using prop_premise_implies_phi_implies_psi = apply_conditional_modus_ponens<
+        add_hypothesis<premise,
+            firstorder::apply_universal_instantiation<x, variable<x>, forall<x, implication<phi, psi>>, implication<phi, psi>>
+        >,
+        use_library_lemma<implication<premise, forall<x, implication<phi, psi>>>>
+    >;
+    using prop_premise_implies_not_psi_implies_not_phi = apply_modus_ponens<
+        use_library_lemma<implication<
+            ternary_implication<premise, phi, psi>,
+            ternary_implication<premise, negation<psi>, negation<phi>>
+        >>,
+        prop_premise_implies_phi_implies_psi
+    >;
+    using prop_premise_implies_not_phi = apply_conditional_modus_ponens<
+        prop_premise_implies_not_psi_implies_not_phi,
+        prop_premise_implies_not_psi
+    >;
+    using prop_premise_implies_forall_x_not_phi = apply_universal_generalization<x,
+        prop_premise_implies_not_phi,
+        implication<premise, forall<x, negation<phi>>>
+    >;
+    using prop_premise_implies_forall_x_not_phi_implies_false = use_library_lemma<implication<premise, negation<forall<x, negation<phi>>>>>;
+    using prop_premise_implies_false_that_way = apply_conditional_modus_ponens<
+        prop_premise_implies_forall_x_not_phi_implies_false,
+        prop_premise_implies_forall_x_not_phi
+    >;
+    using final_premise = conjunction<exists<x, phi>, forall<x, implication<phi, psi>>>;
+    using prop_final_premise_implies_forall_x_psi_implies_false = split_hypotheses<prop_premise_implies_false_that_way>;
+    using result = prop_final_premise_implies_forall_x_psi_implies_false;
+    static_assert(std::is_same_v<result, theorem<implication<conjunction<exists<x, phi>, forall<x, implication<phi, psi>>>, exists<x, psi>>>>);
 };
-template<typename a>
-using apply_lemma_a_implies_a = typename lemma_a_implies_a<a>::result;
+template<typename x, typename phi, typename psi>
+using conditionally_perform_implication_under_existential_quantifier
+    = typename conditionally_perform_implication_under_existential_quantifier_h<x, phi, psi>::result;
+/*template<typename th_exists_x_phi, typename th__forall_x__phi_implies_psi>
+struct actually_perform_implication_under_existential_quantifier_h {};
+template<typename x, typename phi, typename psi>
+struct actually_perform_implication_under_existential_quantifier_h<theorem<exists<x, phi>>, theorem<forall<x, implication<phi, psi>>>> {
+    using th_exists_x_phi = theorem<exists<x, phi>>;
+    using th__forall_x__phi_implies_psi = theorem<forall<x, implication<phi, psi>>>;
+    using prop___exists_x_phi___and___forall_x__phi_implies_psi = apply_modus_ponens_twice<
+        propositional::conjunction_introduction<exists<x, phi>, forall<x, implication<phi, psi>>>,
+        th_exists_x_phi,
+        th__forall_x__phi_implies_psi
+    >;
+    using th_exists_x_psi = apply_modus_ponens<
+        conditionally_perform_implication_under_existential_quantifier<x, phi, psi>,
+        prop___exists_x_phi___and___forall_x__phi_implies_psi
+    >;
+    using result = th_exists_x_phi;
+    static_assert(std::is_same_v<result, theorem<exists<x, phi>>>);
+};
+template<typename th_exists_x_phi, typename th__forall_x__phi_implies_psi>
+using actually_perform_implication_under_existential_quantifier
+    = typename actually_perform_implication_under_existential_quantifier_h<th_exists_x_phi, th__forall_x__phi_implies_psi>::result;*/
 
-template<typename a, typename b, typename c, typename th_a_implies_b, typename th_a_implies_c>
-struct from_proven__a_implies_b__and__a_implies_c__derive__a_implies_b_and_c {
-    static_assert(std::is_same<th_a_implies_b, theorem<implication<a, b>>>::value, "need th_a_implies_b");
-    static_assert(std::is_same<th_a_implies_c, theorem<implication<a, c>>>::value, "need th_a_implies_c");
-    using b_implies_c_implies_b_and_c = propositional::conjunction_introduction<b, c>;
-    using under_a__b_implies_c_implies_b_and_c = apply_modus_ponens<
-        propositional::hypothesis_addition<ternary_implication<b, c, conjunction<b, c>>, a>,
-        b_implies_c_implies_b_and_c
+template<typename alpha, typename th_premise, typename conclusion>
+struct unconditionally_apply_universal_generalization_h {
+    using th_true_implies_premise = add_hypothesis<True, th_premise>;
+    using th_true_implies_conclusion = apply_universal_generalization<alpha, th_true_implies_premise, implication<True, conclusion>>;
+    using th_conclusion = apply_modus_ponens<
+        use_library_lemma<implication<implication<True, conclusion>, conclusion>>,
+        th_true_implies_conclusion
     >;
-    using under_a__b = th_a_implies_b;
-    using under_a__c_implies_b_and_c = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<a, b, implication<c, conjunction<b, c>>>,
-            under_a__b_implies_c_implies_b_and_c
-        >,
-        under_a__b
-    >;
-    static_assert(std::is_same<under_a__c_implies_b_and_c, theorem<ternary_implication<a, c, conjunction<b, c>>>>::value);
-    using under_a__b_and_c = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<a, c, conjunction<b, c>>,
-            under_a__c_implies_b_and_c
-        >,
-        th_a_implies_c
-    >;
-    using result = under_a__b_and_c;
-    static_assert(std::is_same<under_a__b_and_c, theorem<implication<a, conjunction<b, c>>>>::value);
+    using result = th_conclusion;
+    static_assert(std::is_same_v<result, theorem<conclusion>>);
 };
+template<typename alpha, typename th_premise, typename conclusion>
+using unconditionally_apply_universal_generalization
+    = typename unconditionally_apply_universal_generalization_h<alpha, th_premise, conclusion>::result;
 
-template<typename a, typename b, typename c, typename th_a_implies_b, typename th_b_implies_c>
-struct from_proven__a_implies_b__and__b_implies_c__derive__a_implies_c {
-    static_assert(std::is_same<th_a_implies_b, theorem<implication<a, b>>>::value, "need th_a_implies_b");
-    static_assert(std::is_same<th_b_implies_c, theorem<implication<b, c>>>::value, "need th_b_implies_c");
-    using a_implies_b_implies_c = apply_modus_ponens<
-        propositional::hypothesis_addition<implication<b, c>, a>,
-        th_b_implies_c
+template<typename alpha, typename phi>
+struct try_to_implicationally_remove_vacuous_existential_quantifier_h {
+    static_assert(!variable_occurs_in_formula<alpha, phi>::value);
+    using premise = conjunction<negation<forall<alpha, negation<phi>>>, negation<phi>>;
+    using prop_premise_implies_forall_alpha_not_phi = apply_universal_generalization<alpha,
+        propositional::right_conjunction_elimination<exists<alpha, phi>, negation<phi>>,
+        implication<premise, forall<alpha, negation<phi>>>
     >;
-    static_assert(std::is_same<a_implies_b_implies_c, theorem<ternary_implication<a, b, c>>>::value);
-    using a_implies_c = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<a, b, c>,
-            a_implies_b_implies_c
+    using prop_premise_implies_not_forall_alpha_not_phi = propositional::left_conjunction_elimination<exists<alpha, phi>, negation<phi>>;
+    using prop_premise_implies_false = apply_conditional_modus_ponens<
+        add_hypothesis<premise,
+            use_library_lemma<implication<conjunction<forall<alpha, negation<phi>>, negation<forall<alpha, negation<phi>>>>, False>>
         >,
-        th_a_implies_b
+        apply_modus_ponens<
+            use_library_lemma<implication<
+                conjunction<implication<premise, forall<alpha, negation<phi>>>, implication<premise, negation<forall<alpha, negation<phi>>>>>,
+                implication<premise, conjunction<forall<alpha, negation<phi>>, negation<forall<alpha, negation<phi>>>>>
+            >>,
+            apply_modus_ponens_twice<
+                propositional::conjunction_introduction<
+                    implication<premise, forall<alpha, negation<phi>>>,
+                    implication<premise, negation<forall<alpha, negation<phi>>>>
+                >,
+                prop_premise_implies_forall_alpha_not_phi,
+                prop_premise_implies_not_forall_alpha_not_phi
+            >
+        >
     >;
-    using result = a_implies_c;
-    static_assert(std::is_same<result, theorem<implication<a, c>>>::value);
+    using final_premise = exists<alpha, phi>;
+    static_assert(std::is_same_v<prop_premise_implies_false, theorem<implication<conjunction<final_premise, negation<phi>>, False>>>);
+    using prop_final_premise_implies_not_not_phi = split_hypotheses<prop_premise_implies_false>;
+    using prop_final_premise_implies_phi = apply_conditional_modus_ponens<
+        add_hypothesis<final_premise, use_library_lemma<implication<negation<negation<phi>>, phi>>>,
+        prop_final_premise_implies_not_not_phi
+    >;
+    using result = prop_final_premise_implies_phi;
+    static_assert(std::is_same_v<result, theorem<implication<exists<alpha, phi>, phi>>>);
 };
+template<typename alpha, typename phi>
+using try_to_implicationally_remove_vacuous_existential_quantifier
+    = typename try_to_implicationally_remove_vacuous_existential_quantifier_h<alpha, phi>::result;
 
-template<typename a>
-struct lemma_a_and_not_a_implies_false {
-    using premise = conjunction<a, negation<a>>;
-    using under_premise__a = propositional::left_conjunction_elimination<a, negation<a>>;
-    static_assert(std::is_same<under_premise__a, theorem<implication<premise, a>>>::value);
-    using under_premise__a_implies_false = propositional::right_conjunction_elimination<a, negation<a>>;
-    static_assert(std::is_same<under_premise__a_implies_false, theorem<implication<premise, negation<a>>>>::value);
-    using under_premise__false = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<premise, a, False>,
-            under_premise__a_implies_false
-        >,
-        under_premise__a
+template<typename a, typename b, template<typename> typename phi>
+struct try_to_implicationally_silently_replace_variable_A_h {
+    static_assert(!std::is_same_v<a, b>);
+    static_assert(!variable_occurs_in_formula<a, typename phi<b>::type>::value);
+    using phi_of_a = typename phi<a>::type;
+    static_assert(!variable_occurs_in_formula<b, typename phi<a>::type>::value);
+    // our goal: forall a phi(a) -> forall b phi(b)
+    using prop_forall_a_phi_of_a_implies_phi_of_b = firstorder::apply_universal_instantiation<a, variable<b>,
+        forall<a, typename phi<a>::type>,
+        typename phi<b>::type
     >;
-    using result = under_premise__false;
-    static_assert(std::is_same<result, theorem<implication<conjunction<a, negation<a>>, False>>>::value);
+    using prop_forall_a_phi_of_a_implies_forall_b_phi_of_b = apply_universal_generalization<b,
+        prop_forall_a_phi_of_a_implies_phi_of_b,
+        implication<forall<a, typename phi<a>::type>, forall<b, typename phi<b>::type>>
+    >;
+    using result = prop_forall_a_phi_of_a_implies_forall_b_phi_of_b;
+    static_assert(std::is_same_v<result, theorem<implication<forall<a, typename phi<a>::type>, forall<b, typename phi<b>::type>>>>);
 };
-
-template<typename a, typename b, typename th_a_implies_b, typename th_a_implies_not_b>
-struct from_proven__a_implies_b__and__a_implies_not_b__derive__not_a {
-    static_assert(std::is_same<th_a_implies_b, theorem<implication<a, b>>>::value, "need th_a_implies_b");
-    static_assert(std::is_same<th_a_implies_not_b, theorem<implication<a, negation<b>>>>::value, "need th_a_implies_not_b");
-    using a_implies_b_and_not_b = typename from_proven__a_implies_b__and__a_implies_c__derive__a_implies_b_and_c<
-        a, b, negation<b>, th_a_implies_b, th_a_implies_not_b
-    >::result;
-    using b_and_not_b_implies_false = typename lemma_a_and_not_a_implies_false<b>::result;
-    static_assert(std::is_same<b_and_not_b_implies_false, theorem<
-        implication<conjunction<b, negation<b>>, False>
-    >>::value);
-    using a_implies_false = typename from_proven__a_implies_b__and__b_implies_c__derive__a_implies_c<
-        a, conjunction<b, negation<b>>, False, a_implies_b_and_not_b, b_and_not_b_implies_false
-    >::result;
-    using result = a_implies_false;
-    static_assert(std::is_same<result, theorem<negation<a>>>::value);
+template<typename a, typename b, template<typename> typename phi>
+using try_to_implicationally_silently_replace_variable_A = typename try_to_implicationally_silently_replace_variable_A_h<a, b, phi>::result;
+template<typename a, typename b, template<typename> typename phi>
+struct try_to_implicationally_silently_replace_variable_E_h {
+    static_assert(!std::is_same_v<a, b>);
+    static_assert(!variable_occurs_in_formula<a, typename phi<b>::type>::value);
+    static_assert(!variable_occurs_in_formula<b, typename phi<a>::type>::value);
+    // our goal: exists a phi(a) -> exists b phi(b)
+    // that is, forall b not phi(b) -> forall a not phi(a)
+    template<typename var>
+    struct helper_template {
+        using type = negation<typename phi<var>::type>;
+    };
+    using prop_forall_b_not_phi_of_b_implies_forall_a_not_phi_of_a = try_to_implicationally_silently_replace_variable_A<b, a, helper_template>;
+    using prop_not_forall_a_not_phi_of_a_implies_not_forall_b_not_phi_of_b = apply_modus_ponens<
+        use_library_lemma<implication<
+            implication<forall<b, negation<typename phi<b>::type>>, forall<a, negation<typename phi<a>::type>>>,
+            implication<negation<forall<a, negation<typename phi<a>::type>>>, negation<forall<b, negation<typename phi<b>::type>>>>
+        >>,
+        prop_forall_b_not_phi_of_b_implies_forall_a_not_phi_of_a
+    >;
+    using result = prop_not_forall_a_not_phi_of_a_implies_not_forall_b_not_phi_of_b;
+    static_assert(std::is_same_v<result, theorem<
+        implication<exists<a, typename phi<a>::type>, exists<b, typename phi<b>::type>>
+    >>);
 };
-
-template<typename h1, typename h2, typename prop, typename th_h1_implies_h2_implies_prop>
-struct merging_hypotheses {
-    static_assert(std::is_same<th_h1_implies_h2_implies_prop, theorem<ternary_implication<h1, h2, prop>>>::value);
-    using h1_and_h2_implies_h1_implies_h2_implies_prop = apply_modus_ponens<
-        propositional::hypothesis_addition<ternary_implication<h1, h2, prop>, conjunction<h1, h2>>,
-        th_h1_implies_h2_implies_prop
-    >;
-    using h1_and_h2_implies_h2_implies_prop = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<conjunction<h1, h2>, h1, implication<h2, prop>>,
-            h1_and_h2_implies_h1_implies_h2_implies_prop
-        >,
-        propositional::left_conjunction_elimination<h1, h2>
-    >;
-    static_assert(std::is_same<h1_and_h2_implies_h2_implies_prop, theorem<ternary_implication<conjunction<h1, h2>, h2, prop>>>::value);
-    using h1_and_h2_implies_prop = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<conjunction<h1, h2>, h2, prop>,
-            h1_and_h2_implies_h2_implies_prop
-        >,
-        propositional::right_conjunction_elimination<h1, h2>
-    >;
-    using result = h1_and_h2_implies_prop;
-    static_assert(std::is_same<result, implication<conjunction<h1, h2>, prop>>::value);
-};
-
-template<typename h1, typename h2, typename prop, typename th_h1_and_h2_implies_prop>
-struct splitting_hypotheses {
-    static_assert(std::is_same<th_h1_and_h2_implies_prop, theorem<implication<conjunction<h1, h2>, prop>>>::value);
-    using h1_and_h2 = conjunction<h1, h2>;
-    using h2_implies_h1_and_h2_implies_prop = apply_modus_ponens<
-        propositional::hypothesis_addition<implication<h1_and_h2, prop>, h2>,
-        th_h1_and_h2_implies_prop
-    >;
-    using h1_implies_h2_implies_h1_and_h2_implies_prop = apply_modus_ponens<
-        propositional::hypothesis_addition<ternary_implication<h2, h1_and_h2, prop>, h1>,
-        h2_implies_h1_and_h2_implies_prop
-    >;
-    static_assert(std::is_same<h1_implies_h2_implies_h1_and_h2_implies_prop, theorem<
-        ternary_implication<h1, h2, implication<h1_and_h2, prop>>
-    >>::value);
-    using h1_implies_h2_implies_h1_and_h2 = propositional::conjunction_introduction<h1, h2>;
-    using h1__implies__h2_implies_h1_and_h2_implies_prop__implies__h2_implies_h1_and_h2__implies__h2_implies_prop = apply_modus_ponens<
-        propositional::hypothesis_addition<
-            ternary_implication<ternary_implication<h2, h1_and_h2, prop>, implication<h2, h1_and_h2>, implication<h2, prop>>,
-            h1
-        >,
-        propositional::conditional_modus_ponens<h2, h1_and_h2, prop>
-    >;
-    using h1__implies__h2_implies_h1_and_h2__implies__h2_implies_prop = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<h1, ternary_implication<h2, h1_and_h2, prop>,
-                ternary_implication<implication<h2, h1_and_h2>, h2, prop>>,
-            h1__implies__h2_implies_h1_and_h2_implies_prop__implies__h2_implies_h1_and_h2__implies__h2_implies_prop
-        >,
-        h1_implies_h2_implies_h1_and_h2_implies_prop
-    >;
-    using h1_implies_h2_implies_prop = apply_modus_ponens<
-        apply_modus_ponens<
-            propositional::conditional_modus_ponens<h1, implication<h2, h1_and_h2>, implication<h2, prop>>,
-            h1__implies__h2_implies_h1_and_h2__implies__h2_implies_prop
-        >,
-        h1_implies_h2_implies_h1_and_h2
-    >;
-    using result = h1_implies_h2_implies_prop;
-    static_assert(std::is_same<result, theorem<ternary_implication<h1, h2, prop>>>::value);
-};
-
-template<typename a, typename b, typename th_a_implies_b>
-struct contraposition {
-    static_assert(std::is_same<th_a_implies_b, theorem<implication<a, b>>>::value);
-    using not_b_implies_a_implies_b = apply_modus_ponens<
-        propositional::hypothesis_addition<implication<a, b>, negation<b>>,
-        th_a_implies_b
-    >;
-    using not_b_implies_a_implies_not_b = propositional::hypothesis_addition<negation<b>, a>;
-    using not_b_and_a_implies_b_and_not_b = typename from_proven__a_implies_b__and__a_implies_not_b__derive__not_a<
-        conjunction<negation<b>, a>, b,
-        typename merging_hypotheses<negation<b>, a, b, not_b_implies_a_implies_b>::result,
-        typename merging_hypotheses<negation<b>, a, negation<b>, not_b_implies_a_implies_not_b>::result
-    >::result;
-    static_assert(std::is_same<not_b_and_a_implies_b_and_not_b, theorem<
-        implication<conjunction<negation<b>, a>, conjunction<b, negation<b>>>
-    >>::value);
-    using not_b_and_a_implies_false = typename from_proven__a_implies_b__and__b_implies_c__derive__a_implies_c<
-        conjunction<negation<b>, a>, conjunction<b, negation<b>>, False,
-        not_b_and_a_implies_b_and_not_b,
-        typename lemma_a_and_not_a_implies_false<b>::result
-    >::result;
-    static_assert(std::is_same<not_b_and_a_implies_false, implication<conjunction<negation<b>, a>, False>>::value);
-    using not_b_implies_not_a = typename splitting_hypotheses<negation<b>, a, False, not_b_and_a_implies_false>::result;
-    using result = not_b_implies_not_a;
-    static_assert(std::is_same<result, implication<negation<b>, negation<a>>>::value);
-};
+template<typename a, typename b, template<typename> typename phi>
+using try_to_implicationally_silently_replace_variable_E = typename try_to_implicationally_silently_replace_variable_E_h<a, b, phi>::result;
 
 template<typename n>
 struct proof_that_n_is_either_even_or_odd {
     struct k {};
+    template<typename term>
+    using statement_for = disjunction<is_even<term, k>, is_odd<term, k>>;
+
     using prop_0_is_0_plus_0 = apply_modus_ponens<
         axioms::symmetry_of_equality<sum<Zero, Zero>, Zero>,
         axioms::a_plus_0_is_a<Zero>
@@ -231,133 +214,310 @@ struct proof_that_n_is_either_even_or_odd {
         forall<k, negation<equal<Zero, sum<variable<k>, variable<k>>>>>,
         negation<equal<Zero, sum<Zero, Zero>>>
     >;
-    static_assert(std::is_same<prop_forall_k_0_neq_k_plus_k_implies_0_neq_0_plus_0, theorem<
+    static_assert(std::is_same_v<prop_forall_k_0_neq_k_plus_k_implies_0_neq_0_plus_0, theorem<
         implication<forall<k, negation<equal<Zero, sum<variable<k>, variable<k>>>>>, negation<equal<Zero, sum<Zero, Zero>>>>
-    >>::value);
-    using prop_0_neq_0_plus_0_implies_0_eq_0_plus_0 = apply_modus_ponens<
-        propositional::hypothesis_addition<equal<Zero, sum<Zero, Zero>>, negation<equal<Zero, sum<Zero, Zero>>>>,
+    >>);
+    using prop_0_neq_0_plus_0_implies_false = apply_modus_ponens<
+        use_library_lemma<implication<equal<Zero, sum<Zero, Zero>>, negation<negation<equal<Zero, sum<Zero, Zero>>>>>>,
         prop_0_is_0_plus_0
     >;
-    using prop_0_neq_0_plus_0_implies_0_neq_0_plus_0 = apply_lemma_a_implies_a<negation<equal<Zero, sum<Zero, Zero>>>>;
-    using prop_0_neq_0_plus_0_implies_false = typename from_proven__a_implies_b__and__a_implies_not_b__derive__not_a<
-        negation<equal<Zero, sum<Zero, Zero>>>, equal<Zero, sum<Zero, Zero>>,
-        prop_0_neq_0_plus_0_implies_0_eq_0_plus_0, prop_0_neq_0_plus_0_implies_0_neq_0_plus_0
-    >::result;
-    static_assert(std::is_same<prop_0_neq_0_plus_0_implies_false, theorem<
-        implication<negation<equal<Zero, sum<Zero, Zero>>>, False>
-    >>::value);
-    using prop_forall_k_0_neq_k_plus_k_implies_false = typename from_proven__a_implies_b__and__b_implies_c__derive__a_implies_c<
-        forall<k, negation<equal<Zero, sum<variable<k>, variable<k>>>>>, negation<equal<Zero, sum<Zero, Zero>>>, False,
-        prop_forall_k_0_neq_k_plus_k_implies_0_neq_0_plus_0, prop_0_neq_0_plus_0_implies_false
-    >::result;
+    static_assert(std::is_same_v<prop_0_neq_0_plus_0_implies_false, theorem<implication<negation<equal<Zero, sum<Zero, Zero>>>, False>>>);
+    using prop_forall_k_0_neq_k_plus_k_implies_false = apply_modus_ponens_twice<
+        use_library_lemma<ternary_implication<
+            implication<forall<k, negation<equal<Zero, sum<variable<k>, variable<k>>>>>, negation<equal<Zero, sum<Zero, Zero>>>>,
+            implication<negation<equal<Zero, sum<Zero, Zero>>>, False>,
+            implication<forall<k, negation<equal<Zero, sum<variable<k>, variable<k>>>>>, False>
+        >>,
+        prop_forall_k_0_neq_k_plus_k_implies_0_neq_0_plus_0,
+        prop_0_neq_0_plus_0_implies_false
+    >;
     using prop_0_is_even = prop_forall_k_0_neq_k_plus_k_implies_false;
-    static_assert(std::is_same<prop_0_is_even, theorem<is_even<Zero, k>>>::value);
+    static_assert(std::is_same_v<prop_0_is_even, theorem<is_even<Zero, k>>>);
     using prop_0_is_either_even_or_odd = apply_modus_ponens<
         propositional::left_disjunction_introduction<is_even<Zero, k>, is_odd<Zero, k>>,
         prop_0_is_even
     >;
-    static_assert(std::is_same<prop_0_is_either_even_or_odd, theorem<disjunction<is_even<Zero, k>, is_odd<Zero, k>>>>::value);
+    static_assert(std::is_same_v<prop_0_is_either_even_or_odd, theorem<statement_for<Zero>>>);
     // base case: done
 
-    struct m {};
+    //struct m {};
+    using m = n;
     using premise = disjunction<is_even<variable<m>, k>, is_odd<variable<m>, k>>;
     using goal = disjunction<is_even<S<variable<m>>, k>, is_odd<S<variable<m>>, k>>;
-    using subgoal0 = implication<is_even<variable<m>, k>, is_odd<S<variable<m>>, k>>;
-    template<typename x, typename phi, typename psi, typename th_exists_x_phi, typename th_phi_implies_psi>
-    struct promote_implication_under_existential_quantifier {
-        static_assert(std::is_same<th_exists_x_phi, theorem<exists<x, phi>>>::value);
-        static_assert(std::is_same<th_phi_implies_psi, theorem<implication<phi, psi>>>::value);
-        using prop_not_psi_implies_not_phi = typename contraposition<psi, phi, th_phi_implies_psi>::result;
-        using prop_forall_x__not_psi_implies_not_phi = apply_universal_generalization<x,
-            prop_not_psi_implies_not_phi,
-            forall<x, implication<negation<psi>, negation<phi>>>
-        >;
-        static_assert(std::is_same<prop_forall_x__not_psi_implies_not_phi, theorem<
-            forall<x, implication<negation<psi>, negation<phi>>>
-        >>::value);
-        struct y {};
-        using prop_forall_x_not_psi_implies_not_psi_of_y = firstorder::apply_universal_instantiation<x, variable<y>,
-            forall<x, negation<psi>>,
-            replace_free_variable_with_term<x, variable<y>, negation<psi>>
-        >;
-        using prop_not_psi_of_y_implies_not_phi_of_y = apply_modus_ponens<
-            firstorder::apply_universal_instantiation<x, variable<y>,
-                forall<x, implication<negation<psi>, negation<phi>>>,
-                typename replace_free_variable_with_term<x, variable<y>, implication<negation<psi>, negation<phi>>>::result
-            >,
-            prop_forall_x__not_psi_implies_not_phi
-        >;
-        using prop_forall_x_not_psi_implies_not_psi_of_y_implies_not_phi_of_y = apply_modus_ponens<
-            propositional::hypothesis_addition<
-                typename replace_free_variable_with_term<x, variable<y>, implication<negation<psi>, negation<phi>>>::result,
-                forall<x, negation<psi>>
-            >,
-            prop_not_psi_of_y_implies_not_phi_of_y
-        >;
-        using prop_forall_x_not_psi_implies_not_phi_of_y = apply_modus_ponens<
-            apply_modus_ponens<
-                propositional::conditional_modus_ponens<
-                    forall<x, negation<psi>>,
-                    typename replace_free_variable_with_term<x, variable<y>, negation<psi>>::result,
-                    typename replace_free_variable_with_term<x, variable<y>, negation<phi>>::result
-                >,
-                prop_forall_x_not_psi_implies_not_psi_of_y_implies_not_phi_of_y
-            >,
-            prop_forall_x_not_psi_implies_not_psi_of_y
-        >;
-        static_assert(std::is_same<prop_forall_x_not_psi_implies_not_phi_of_y, theorem<
-            implication<forall<x, negation<psi>>, typename replace_free_variable_with_term<x, variable<y>, negation<phi>>::result>
-        >>::value);
-        //using prop_forall_x_not_psi_implies_forall_x_not_psi = typename lemma_a_implies_a<forall<x, negation<psi>>>::result;
-        using prop_forall_x_not_psi_implies_forall_x_not_phi = apply_universal_generalization<x,
-            prop_forall_x_not_psi_implies_not_phi_of_y,
-            implication<forall<x, negation<psi>>, forall<x, negation<phi>>>
-        >;
-        using prop_exists_x_phi_implies_exists_x_psi = typename contraposition<
-            forall<x, negation<psi>>, forall<x, negation<phi>>,
-            prop_forall_x_not_psi_implies_forall_x_not_phi
-        >::result;
-        using result = prop_exists_x_phi_implies_exists_x_psi;
-        static_assert(std::is_same<prop_exists_x_phi_implies_exists_x_psi, theorem<implication<exists<x, phi>, exists<x, psi>>>>::value);
-    };
 
+    using subgoal0 = implication<is_even<variable<m>, k>, is_odd<S<variable<m>>, k>>;
     using prop_m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k = axioms::S_is_a_function<variable<m>, sum<variable<k>, variable<k>>>;
-    using prop_forall_k__m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k = apply_universal_generalization<k,
+    using prop__forall_k__m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k = unconditionally_apply_universal_generalization<k,
         prop_m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k,
         forall<k, implication<equal<variable<m>, sum<variable<k>, variable<k>>>, equal<S<variable<m>>, S<sum<variable<k>, variable<k>>>>>>
     >;
-    /*using prop_m_is_even_implies_Sm_is_odd = typename promote_implication_under_existential_quantifier<k,
-        equal<variable<m>, sum<variable<k>, variable<k>>>,
-        equal<S<variable<m>>, S<sum<variable<k>, variable<k>>>>,
-        prop_m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k
-    >::result;
-    static_assert(std::is_same<prop_m_is_even_implies_Sm_is_odd, theorem<
-        implication<is_even<variable<m>, k>, is_odd<S<variable<m>>, k>>
-    >>::value);*/
+    using prop_m_is_even_implies_Sm_is_odd = apply_modus_ponens<
+        swap_hypotheses_in_implication<split_hypotheses<
+            conditionally_perform_implication_under_existential_quantifier<k,
+                equal<variable<m>, sum<variable<k>, variable<k>>>,
+                equal<S<variable<m>>, S<sum<variable<k>, variable<k>>>>
+            >
+        >>,
+        prop__forall_k__m_equals_k_plus_k_implies_Sm_equals_S_of_k_plus_k
+    >;
+    static_assert(std::is_same_v<prop_m_is_even_implies_Sm_is_odd, theorem<subgoal0>>);
 
-    // using prop_n_equals_k_plus_k_implies_Sn_equals_S_of_k_plus_k = axioms::S_is_a_function<variable<n>, sum<variable<k>, variable<k>>>;
-    // // trick to rename variable
-    // struct l {};
-    // using prop__forall_l__n_equals_l_plus_l_implies_Sn_equals_S_of_l_plus_l = firstorder::apply_universal_generalization<l, variable<k>,
-    //     prop_n_equals_k_plus_k_implies_Sn_equals_S_of_k_plus_k,
-    //     forall<l, implication<equal<variable<n>, sum<variable<l>, variable<l>>>, equal<S<variable<n>>, S<sum<variable<l>, variable<l>>>>>>
-    // >;
-    // struct m {};
-    // using prop_n_equals_m_plus_m_implies_Sn_equals_S_of_m_plus_m = firstorder::apply_universal_instantiation<l, variable<m>,
-    //     prop__forall_l__n_equals_l_plus_l_implies_Sn_equals_S_of_l_plus_l,
-    //     implication<equal<variable<n>, sum<variable<m>, variable<m>>>, equal<S<variable<n>>, S<sum<variable<m>, variable<m>>>>>
-    // >;
-    // using prop__forall_k__n_equals_k_plus_k_implies_Sn_equals_S_of_k_plus_k = firstorder::apply_universal_generalization<k, variable<m>,
-    //     prop_n_equals_m_plus_m_implies_Sn_equals_S_of_m_plus_m,
-    //     forall<k, implication<equal<variable<n>, sum<variable<k>, variable<k>>>, equal<S<variable<n>>, S<sum<variable<k>, variable<k>>>>>>
-    // >;
-    // // yes
+    using subgoal1 = implication<is_odd<variable<m>, k>, is_even<S<variable<m>>, k>>;
+    template<typename a, typename b, typename c>
+    struct lemma_a_equals_b_implies_b_equals_c_implies_a_equals_c {
+        using result = apply_conditional_conditional_modus_ponens<
+            add_hypothesis<equal<a, b>, add_hypothesis<equal<b, c>, axioms::transitivity_of_equality<a, b, c>>>,
+            apply_conditional_conditional_modus_ponens_twice<
+                add_hypothesis<equal<a, b>, add_hypothesis<equal<b, c>, propositional::conjunction_introduction<equal<a, b>, equal<b, c>>>>,
+                propositional::hypothesis_addition<equal<a, b>, equal<b, c>>,
+                add_hypothesis<equal<a, b>, use_library_lemma<implication<equal<b, c>, equal<b, c>>>>
+            >
+        >;
+        static_assert(std::is_same_v<result, theorem<ternary_implication<equal<a, b>, equal<b, c>, equal<a, c>>>>);
+    };
+    template<typename a, typename b, typename c, typename d>
+    struct lemma_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_d {
+        using prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_b_equals_d = add_hypothesis<equal<a, b>,
+            typename lemma_a_equals_b_implies_b_equals_c_implies_a_equals_c<b, c, d>::result
+        >;
+        using prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_b = use_library_lemma<
+            multiary_implication<equal<a, b>, equal<b, c>, equal<c, d>, equal<a, b>>
+        >;
+        using prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_d = apply_cccmp_twice<
+            add_hypothesis<equal<a, b>, add_hypothesis<equal<b, c>, add_hypothesis<equal<c, d>,
+                typename lemma_a_equals_b_implies_b_equals_c_implies_a_equals_c<a, b, d>::result
+            >>>,
+            prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_b,
+            prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_b_equals_d
+        >;
+        using result = prop_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_d;
+        static_assert(std::is_same_v<result, theorem<
+            multiary_implication<equal<a, b>, equal<b, c>, equal<c, d>, equal<a, d>>
+        >>);
+    };
+    template<typename a, typename b>
+    struct lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_different_variables {  // by induction on b
+        static_assert(!std::is_same_v<a, b>);
+        template<typename a_prime, typename b_prime>
+        using statement = equal<sum<S<a_prime>, b_prime>, S<sum<a_prime, b_prime>>>;
+        using prop_Sa_plus_0_equals_Sa = axioms::a_plus_0_is_a<S<variable<a>>>;
+        using prop_Sa_equals_S_of_a_plus_0 = apply_modus_ponens<
+            axioms::S_is_a_function<variable<a>, sum<variable<a>, Zero>>,
+            apply_modus_ponens<axioms::equality_is_symmetric<sum<variable<a>, Zero>, variable<a>>, axioms::a_plus_0_is_a<variable<a>>>
+        >;
+        using prop_Sa_plus_0_equals_S_of_a_plus_0 = apply_modus_ponens<
+            axioms::equality_is_transitive<sum<S<variable<a>>, Zero>, S<variable<a>>, S<sum<variable<a>, Zero>>>,
+            apply_modus_ponens_twice<
+                propositional::conjunction_introduction<
+                    equal<sum<S<variable<a>>, Zero>, S<variable<a>>>,
+                    equal<S<variable<a>>, S<sum<variable<a>, Zero>>>
+                >,
+                prop_Sa_plus_0_equals_Sa,
+                prop_Sa_equals_S_of_a_plus_0
+            >
+        >;
+        static_assert(std::is_same_v<prop_Sa_plus_0_equals_S_of_a_plus_0, theorem<statement<variable<a>, Zero>>>);
+        using premise = statement<variable<a>, variable<b>>;
+        using prop_Sa_plus_Sb_equals_S_of_Sa_plus_b = axioms::a_plus_Sb_is_S_of_a_plus_b<S<variable<a>>, variable<b>>;
+        using prop_premise_implies_S_of_Sa_plus_b_equals_SS_of_a_plus_b
+            = axioms::S_is_a_function<sum<S<variable<a>>, variable<b>>, S<sum<variable<a>, variable<b>>>>;
+        using prop_SS_of_a_plus_b_equals_S_of_a_plus_Sb = apply_modus_ponens<
+            axioms::S_is_a_function<S<sum<variable<a>, variable<b>>>, sum<variable<a>, S<variable<b>>>>,
+            apply_modus_ponens<
+                axioms::symmetry_of_equality<sum<variable<a>, S<variable<b>>>, S<sum<variable<a>, variable<b>>>>,
+                axioms::a_plus_Sb_is_S_of_a_plus_b<variable<a>, variable<b>>
+            >
+        >;
+        using prop_premise_implies_Sa_plus_Sb_equals_S_of_a_plus_Sb = apply_conditional_modus_ponens_thrice<
+            add_hypothesis<premise, typename lemma_a_equals_b_implies_b_equals_c_implies_c_equals_d_implies_a_equals_d<
+                sum<S<variable<a>>, S<variable<b>>>,
+                S<sum<S<variable<a>>, variable<b>>>,
+                S<S<sum<variable<a>, variable<b>>>>,
+                S<sum<variable<a>, S<variable<b>>>>
+            >::result>,
+            add_hypothesis<premise, prop_Sa_plus_Sb_equals_S_of_Sa_plus_b>,
+            prop_premise_implies_S_of_Sa_plus_b_equals_SS_of_a_plus_b,
+            add_hypothesis<premise, prop_SS_of_a_plus_b_equals_S_of_a_plus_Sb>
+        >;
+        static_assert(std::is_same_v<prop_premise_implies_Sa_plus_Sb_equals_S_of_a_plus_Sb, theorem<
+            implication<statement<variable<a>, variable<b>>, statement<variable<a>, S<variable<b>>>>
+        >>);
+        using result = apply_modus_ponens_twice<
+            axioms::induction<b, statement<variable<a>, variable<b>>>,
+            prop_Sa_plus_0_equals_S_of_a_plus_0,
+            prop_premise_implies_Sa_plus_Sb_equals_S_of_a_plus_Sb
+        >;
+        static_assert(std::is_same_v<result, theorem<statement<variable<a>, variable<b>>>>);
+    };
+    template<typename a>
+    struct lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_identical_variables {
+        struct b {};
+        using result_for_ab = typename lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_different_variables<a, b>::result;
+        template<typename a_prime, typename b_prime>
+        using statement = typename lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_different_variables<a, b>
+            ::template statement<a_prime, b_prime>;
+        static_assert(std::is_same_v<result_for_ab, theorem<
+            statement<variable<a>, variable<b>>
+        >>);
+        using gen = unconditionally_apply_universal_generalization<b, result_for_ab, forall<b, statement<variable<a>, variable<b>>>>;
+        using inst = apply_modus_ponens<
+            firstorder::apply_universal_instantiation<b, variable<a>, forall<b, statement<variable<a>, variable<b>>>, statement<variable<a>, variable<a>>>,
+            gen
+        >;
+        using result = inst;
+        static_assert(std::is_same_v<result, theorem<statement<variable<a>, variable<a>>>>);
+    };
+    template<typename a, typename b>
+    using lemma_Sa_plus_b_equals_S_of_a_plus_b = std::conditional_t<std::is_same_v<a, b>,
+        lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_identical_variables<a>,
+        lemma_Sa_plus_b_equals_S_of_a_plus_b__implementation_for_different_variables<a, b>
+    >;
+    using prop_SS_of_k_plus_k_equals_S_of_Sk_plus_k = apply_modus_ponens<
+        axioms::S_is_a_function<S<sum<variable<k>, variable<k>>>, sum<S<variable<k>>, variable<k>>>,
+        apply_modus_ponens<
+            axioms::symmetry_of_equality<sum<S<variable<k>>, variable<k>>, S<sum<variable<k>, variable<k>>>>,
+            typename lemma_Sa_plus_b_equals_S_of_a_plus_b<k, k>::result
+        >
+    >;
+    using prop_S_of_Sk_plus_k_equals_Sk_plus_Sk = apply_modus_ponens<
+        axioms::symmetry_of_equality<sum<S<variable<k>>, S<variable<k>>>, S<sum<S<variable<k>>, variable<k>>>>,
+        axioms::a_plus_Sb_is_S_of_a_plus_b<S<variable<k>>, variable<k>>
+    >;
+    using prop_SS_of_k_plus_k_equals_Sk_plus_Sk = apply_modus_ponens_twice<
+        typename lemma_a_equals_b_implies_b_equals_c_implies_a_equals_c<
+            S<S<sum<variable<k>, variable<k>>>>,
+            S<sum<S<variable<k>>, variable<k>>>,
+            sum<S<variable<k>>, S<variable<k>>>
+        >::result,
+        prop_SS_of_k_plus_k_equals_S_of_Sk_plus_k,
+        prop_S_of_Sk_plus_k_equals_Sk_plus_Sk
+    >;
+    using prop_Sm_equals_SS_of_k_plus_k_implies_Sm_equals_Sk_plus_Sk = apply_conditional_modus_ponens_twice<
+        add_hypothesis<equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>,
+            typename lemma_a_equals_b_implies_b_equals_c_implies_a_equals_c<
+                S<variable<m>>,
+                S<S<sum<variable<k>, variable<k>>>>,
+                sum<S<variable<k>>, S<variable<k>>>
+            >::result
+        >,
+        use_library_lemma<
+            implication<equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>, equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>>
+        >,
+        add_hypothesis<equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>, prop_SS_of_k_plus_k_equals_Sk_plus_Sk>
+    >;
+    using prop_m_equals_S_of_k_plus_k_implies_Sm_equals_Sk_plus_Sk = apply_modus_ponens_twice<
+        use_library_lemma<ternary_implication<
+            implication<equal<variable<m>, S<sum<variable<k>, variable<k>>>>, equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>>,
+            implication<equal<S<variable<m>>, S<S<sum<variable<k>, variable<k>>>>>, equal<S<variable<m>>, sum<S<variable<k>>, S<variable<k>>>>>,
+            implication<equal<variable<m>, S<sum<variable<k>, variable<k>>>>, equal<S<variable<m>>, sum<S<variable<k>>, S<variable<k>>>>>
+        >>,
+        axioms::S_is_a_function<variable<m>, S<sum<variable<k>, variable<k>>>>,
+        prop_Sm_equals_SS_of_k_plus_k_implies_Sm_equals_Sk_plus_Sk
+    >;
+    static_assert(std::is_same_v<prop_m_equals_S_of_k_plus_k_implies_Sm_equals_Sk_plus_Sk, theorem<
+        implication<equal<variable<m>, S<sum<variable<k>, variable<k>>>>, equal<S<variable<m>>, sum<S<variable<k>>, S<variable<k>>>>>
+    >>);
+    struct l {};
+    using prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_m_equals_S_of_k_plus_k = propositional::hypothesis_addition<
+        equal<variable<m>, S<sum<variable<k>, variable<k>>>>,
+        forall<l, negation<equal<S<variable<m>>, sum<variable<l>, variable<l>>>>>
+    >;
+    using prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_Sm_equals_Sk_plus_Sk = apply_conditional_conditional_modus_ponens<
+        add_hypothesis<equal<variable<m>, S<sum<variable<k>, variable<k>>>>,
+            add_hypothesis<forall<l, negation<equal<S<variable<m>>, sum<variable<l>, variable<l>>>>>,
+                prop_m_equals_S_of_k_plus_k_implies_Sm_equals_Sk_plus_Sk
+            >
+        >,
+        prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_m_equals_S_of_k_plus_k
+    >;
+    using prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_Sm_neq_Sk_plus_Sk = add_hypothesis<
+        equal<variable<m>, S<sum<variable<k>, variable<k>>>>,
+        firstorder::apply_universal_instantiation<l, S<variable<k>>,
+            forall<l, negation<equal<S<variable<m>>, sum<variable<l>, variable<l>>>>>,
+            negation<equal<S<variable<m>>, sum<S<variable<k>>, S<variable<k>>>>>
+        >
+    >;
+    using prop_m_equals_S_of_k_plus_k_implies_exists_l_Sm_equals_l_plus_l = apply_conditional_conditional_modus_ponens<
+        prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_Sm_neq_Sk_plus_Sk,
+        prop_m_equals_S_of_k_plus_k_implies_forall_l_Sm_neq_l_plus_l_implies_Sm_equals_Sk_plus_Sk
+    >;
+    using prop_m_equals_S_of_k_plus_k_implies_Sm_is_even_wrt_l = prop_m_equals_S_of_k_plus_k_implies_exists_l_Sm_equals_l_plus_l;
+    static_assert(std::is_same_v<prop_m_equals_S_of_k_plus_k_implies_Sm_is_even_wrt_l, theorem<
+        implication<equal<variable<m>, S<sum<variable<k>, variable<k>>>>, is_even<S<variable<m>>, l>>
+    >>);
+    using prop__forall_k__m_equals_S_of_k_plus_k_implies_Sm_is_even_wrt_l = unconditionally_apply_universal_generalization<k,
+        prop_m_equals_S_of_k_plus_k_implies_Sm_is_even_wrt_l,
+        forall<k, implication<equal<variable<m>, S<sum<variable<k>, variable<k>>>>, is_even<S<variable<m>>, l>>>
+    >;
+    using premise1 = is_odd<variable<m>, k>;
+    using prop_premise1_implies_exists_k_Sm_is_even_wrt_l = apply_conditional_modus_ponens<
+        split_hypotheses<conditionally_perform_implication_under_existential_quantifier<k,
+            equal<variable<m>, S<sum<variable<k>, variable<k>>>>,
+            is_even<S<variable<m>>, l>
+        >>,
+        add_hypothesis<premise1, prop__forall_k__m_equals_S_of_k_plus_k_implies_Sm_is_even_wrt_l>
+    >;
+    static_assert(std::is_same_v<prop_premise1_implies_exists_k_Sm_is_even_wrt_l, theorem<
+        implication<premise1, exists<k, is_even<S<variable<m>>, l>>>
+    >>);
+    using prop_premise1_implies_Sm_is_even_wrt_l = apply_conditional_modus_ponens<
+        add_hypothesis<premise1, try_to_implicationally_remove_vacuous_existential_quantifier<k, is_even<S<variable<m>>, l>>>,
+        prop_premise1_implies_exists_k_Sm_is_even_wrt_l
+    >;
+    static_assert(std::is_same_v<prop_premise1_implies_Sm_is_even_wrt_l, theorem<
+        implication<is_odd<variable<m>, k>, is_even<S<variable<m>>, l>>
+    >>);
+    template<typename a>
+    struct temp_template {
+        using type = equal<S<variable<m>>, sum<variable<a>, variable<a>>>;
+    };
+    using prop_Sm_is_even_wrt_l_implies_Sm_is_even_wrt_k = try_to_implicationally_silently_replace_variable_E<l, k, temp_template>;
+    using prop_m_is_odd_implies_Sm_is_even = apply_modus_ponens_twice<
+        use_library_lemma<ternary_implication<
+            implication<is_odd<variable<m>, k>, is_even<S<variable<m>>, l>>,
+            implication<is_even<S<variable<m>>, l>, is_even<S<variable<m>>, k>>,
+            implication<is_odd<variable<m>, k>, is_even<S<variable<m>>, k>>
+        >>,
+        prop_premise1_implies_Sm_is_even_wrt_l,
+        prop_Sm_is_even_wrt_l_implies_Sm_is_even_wrt_k
+    >;
+    static_assert(std::is_same_v<prop_m_is_odd_implies_Sm_is_even, theorem<subgoal1>>);
+
+    // almost done!
+
+    using m_is_even = is_even<variable<m>, k>;
+    using m_is_odd = is_odd<variable<m>, k>;
+    using Sm_is_even = is_even<S<variable<m>>, k>;
+    using Sm_is_odd = is_odd<S<variable<m>>, k>;
+    using prop_statement_for_m_implies_statement_for_Sm = apply_modus_ponens<
+        use_library_lemma<implication<
+            conjunction<implication<m_is_even, Sm_is_odd>, implication<m_is_odd, Sm_is_even>>,
+            implication<statement_for<variable<m>>, statement_for<S<variable<m>>>>
+        >>,
+        apply_modus_ponens_twice<
+            propositional::conjunction_introduction<implication<m_is_even, Sm_is_odd>, implication<m_is_odd, Sm_is_even>>,
+            prop_m_is_even_implies_Sm_is_odd,
+            prop_m_is_odd_implies_Sm_is_even
+        >
+    >;
+    using prop_n_is_either_even_or_odd_implies_Sn_is_either_even_or_odd = prop_statement_for_m_implies_statement_for_Sm;  // remember, m = n
+    static_assert(std::is_same_v<prop_n_is_either_even_or_odd_implies_Sn_is_either_even_or_odd, theorem<
+        implication<statement_for<variable<n>>, statement_for<S<variable<n>>>>
+    >>);
+
+    using prop_statement_for_n = apply_modus_ponens_twice<
+        axioms::induction<n, statement_for<variable<n>>>,
+        prop_0_is_either_even_or_odd,
+        prop_n_is_either_even_or_odd_implies_Sn_is_either_even_or_odd
+    >;
+    static_assert(std::is_same_v<prop_statement_for_n, theorem<
+        disjunction<exists<k, equal<variable<n>, sum<variable<k>, variable<k>>>>, exists<k, equal<variable<n>, S<sum<variable<k>, variable<k>>>>>>
+    >>);
 };
 
 
-
 void test2() {
-    /*struct n {};
+    struct n {};
     using proof = proof_that_n_is_either_even_or_odd<n>;
     using k = proof::k;
     static_assert(is_wellformed_term<variable<n>>::value);
@@ -371,27 +531,5 @@ void test2() {
     >>::value);
     static_assert(std::is_same<proof::prop_0_is_0_plus_0, theorem<equal<Zero, sum<Zero, Zero>>> >::value);
     static_assert(std::is_same<replace_free_variable_with_term<k, Zero, equal<Zero, sum<variable<k>, variable<k>>>>::result,
-        equal<Zero, sum<Zero, Zero>>>::value);*/
-
-    /*static_assert(std::is_same<proof::prop_0_is_even, theorem<
-        exists<k, equal<Zero, sum<variable<k>, variable<k>>>>
-    >>::value);
-    static_assert(std::is_same<proof::prop_0_is_even, theorem<is_even<Zero, k>>>::value);
-    static_assert(std::is_same<proof::prop_0_is_either_even_or_odd, theorem<
-        disjunction<is_even<Zero, k>, is_odd<Zero, k>>
-    >>::value);
-    using l = proof::l;
-    static_assert(std::is_same<proof::prop__forall_l__n_equals_l_plus_l_implies_Sn_equals_S_of_l_plus_l, theorem<
-        forall<l, implication<equal<variable<n>, sum<variable<l>, variable<l>>>, equal<S<variable<n>>, S<sum<variable<l>, variable<l>>>>>>
-    >>::value);
-    using m = proof::m;
-    static_assert(std::is_same<proof::prop_n_equals_m_plus_m_implies_Sn_equals_S_of_m_plus_m, theorem<
-        implication<equal<variable<n>, sum<variable<m>, variable<m>>>, equal<S<variable<n>>, S<sum<variable<m>, variable<m>>>>>
-    >>::value);
-    static_assert(std::is_same<proof::prop__forall_k__n_equals_k_plus_k_implies_Sn_equals_S_of_k_plus_k, theorem<
-        forall<k, implication<equal<variable<n>, sum<variable<k>, variable<k>>>, equal<S<variable<n>>, S<sum<variable<k>, variable<k>>>>>>
-    >>::value);*/
-}
-
-void maintest() {
+        equal<Zero, sum<Zero, Zero>>>::value);
 }

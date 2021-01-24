@@ -8,9 +8,6 @@ template<bool>
 struct switch_type : std::true_type {};
 template<>
 struct switch_type<false> : std::false_type {};
-struct _undefined_t {  // if this is returned, something went wrong; for implementation purposes only
-    static const bool undefined = true;
-};
 template<typename...>
 struct some_truetype : std::false_type {};
 template<typename t, typename... others>
@@ -29,6 +26,7 @@ namespace terms {
     template<typename... terms>
     struct are_wellformed_terms : all_truetypes<is_wellformed_term<terms>...> {};
 
+    // these template template shorthands don't work, currently everything of this kind is defined straighforwardly, but lengthy
     template<template<typename...> typename, typename>
     struct is_term_container_composable_with_terminal : std::false_type {};
     template<template<typename...> typename, template<typename...> typename>
@@ -121,7 +119,7 @@ namespace atoms {
             {};
 
     template<typename a, typename b>
-    struct variable_occurs_in_atom : _undefined_t {};
+    struct variable_occurs_in_atom;
 }
 
 
@@ -135,6 +133,8 @@ namespace formulae {
 
     template<typename alpha, typename phi>
     struct variable_occurs_in_formula : variable_occurs_in_atom<alpha, phi> {};
+    template<typename alpha>
+    struct variable_occurs_in_formula<alpha, False> : std::false_type {};
     template<typename alpha, typename phi, typename psi>
     struct variable_occurs_in_formula<alpha, implication<phi, psi>>
             : switch_type<variable_occurs_in_formula<alpha, phi>::value || variable_occurs_in_formula<alpha, psi>::value>
@@ -149,7 +149,7 @@ namespace formulae {
             {};
     template<typename alpha, typename x, typename phi>
     struct variable_occurs_in_formula<alpha, forall<x, phi>>
-            : switch_type<std::is_same<alpha, x>::value || variable_occurs_in_formula<alpha, phi>::value>
+            : switch_type<std::is_same_v<alpha, x> || variable_occurs_in_formula<alpha, phi>::value>
             {};
     template<typename alpha, typename... phis>
     struct variable_occurs_in_some_formula : some_truetype<variable_occurs_in_formula<alpha, phis>...> {};
@@ -170,7 +170,7 @@ namespace formulae {
             {};
     template<typename var, typename x, typename phi>
     struct variable_is_quantified_over_in_formula<var, forall<x, phi>>
-            : switch_type<std::is_same<var, x>::value || variable_is_quantified_over_in_formula<var, phi>::value>
+            : switch_type<std::is_same_v<var, x> || variable_is_quantified_over_in_formula<var, phi>::value>
             {};
 
     template<typename t>
@@ -193,11 +193,11 @@ namespace formulae {
     struct are_wff : all_truetypes<is_wff<phis>...> {};
 
     template<typename alpha, typename beta, typename phi>
-    struct replace_free_variable_with_term : _undefined_t {};  // replaces all variable<alpha> with beta,
+    struct replace_free_variable_with_term;  // replaces all variable<alpha> with beta,
                                                             // e.g., sum<variable<alpha>, Zero> -> sum<beta, Zero>
     template<typename alpha, typename beta, typename gamma>
     struct replace_free_variable_with_term<alpha, beta, variable<gamma>> {
-        using result = typename std::conditional<std::is_same<alpha, gamma>::value, beta, variable<gamma>>::type;
+        using result = typename std::conditional<std::is_same_v<alpha, gamma>, beta, variable<gamma>>::type;
     };
     template<typename alpha, typename beta, typename phi, typename psi>
     struct replace_free_variable_with_term<alpha, beta, implication<phi, psi>> {
@@ -250,11 +250,11 @@ template<typename alpha, typename th_conditioned_premise, typename conditioned_c
 struct universal_introduction : illformed_universal_introduction<alpha, th_conditioned_premise, conditioned_conclusion> {};
 template<typename alpha, typename hypothesis, typename phi>
 struct universal_introduction<alpha, theorem<implication<hypothesis, phi>>, implication<hypothesis, forall<alpha, phi>>> {
-    using th_conditioned_premise = implication<hypothesis, phi>;
+    using conditioned_premise = implication<hypothesis, phi>;
     using conditioned_conclusion = implication<hypothesis, forall<alpha, phi>>;
-    using result = typename std::conditional<terms::mb_variable<alpha>::value && formulae::is_wff<th_conditioned_premise>::value
+    using result = typename std::conditional<terms::mb_variable<alpha>::value && formulae::is_wff<conditioned_premise>::value
         && formulae::is_wff<conditioned_conclusion>::value && !formulae::variable_occurs_free_in_formula<alpha, hypothesis>::value, /* ! */
-        theorem<conditioned_conclusion>, illformed_universal_introduction<alpha, th_conditioned_premise, conditioned_conclusion>
+        theorem<conditioned_conclusion>, illformed_universal_introduction<alpha, conditioned_premise, conditioned_conclusion>
     >::type;
 };
 
@@ -282,7 +282,7 @@ namespace firstorder {
         using result = typename std::conditional<terms::mb_variable<alpha>::value && terms::is_wellformed_term<beta>::value
             //&& !terms::variable_occurs_in_term<alpha, beta>::value
             && !formulae::some_term_variable_is_quantified_over_in_formula<beta, phi_prime>::value
-            && std::is_same<phi_prime, typename formulae::replace_free_variable_with_term<alpha, beta, phi>::result>::value,
+            && std::is_same_v<phi_prime, typename formulae::replace_free_variable_with_term<alpha, beta, phi>::result>,
             theorem<implication<forall<alpha, phi>, phi_prime>>, illformed_universal_elimination<alpha, beta, forall<alpha, phi>, phi_prime>
         >::type;
     };
